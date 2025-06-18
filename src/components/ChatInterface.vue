@@ -74,6 +74,9 @@ const sendMessage = async () => {
   currentConversation.value.messages.push(userMessage)
   currentConversation.value.lastUpdated = new Date()
 
+  // 立即保存用户消息
+  saveConversations()
+
   inputMessage.value = ''
   isLoading.value = true
 
@@ -108,6 +111,8 @@ const sendMessage = async () => {
   } finally {
     isLoading.value = false
     await scrollToBottom()
+    // 保存对话数据
+    saveConversations()
   }
 }
 
@@ -143,12 +148,16 @@ const newConversation = () => {
   }
   conversations.value.unshift(newConv)
   currentConversationId.value = newConv.id
+  // 保存对话数据
+  saveConversations()
 }
 
 // 切换对话
 const switchConversation = (conversationId) => {
   currentConversationId.value = conversationId
   nextTick(() => scrollToBottom())
+  // 保存当前对话ID
+  saveConversations()
 }
 
 // 删除对话
@@ -160,6 +169,8 @@ const deleteConversation = (conversationId) => {
   if (currentConversationId.value === conversationId) {
     currentConversationId.value = conversations.value[0].id
   }
+  // 保存对话数据
+  saveConversations()
 }
 
 // 清空当前对话
@@ -176,6 +187,8 @@ const clearCurrentChat = () => {
     ]
     conv.title = '新的对话'
     conv.lastUpdated = new Date()
+    // 保存对话数据
+    saveConversations()
   }
 }
 
@@ -218,6 +231,46 @@ const handleEscKey = (event) => {
   }
 }
 
+// 保存对话数据到localStorage
+const saveConversations = () => {
+  try {
+    localStorage.setItem('aiChatConversations', JSON.stringify(conversations.value))
+    localStorage.setItem('aiChatCurrentId', currentConversationId.value.toString())
+  } catch (error) {
+    console.error('保存对话数据失败:', error)
+  }
+}
+
+// 从localStorage加载对话数据
+const loadConversations = () => {
+  try {
+    const savedConversations = localStorage.getItem('aiChatConversations')
+    const savedCurrentId = localStorage.getItem('aiChatCurrentId')
+
+    if (savedConversations) {
+      const parsedConversations = JSON.parse(savedConversations)
+      // 恢复Date对象
+      parsedConversations.forEach(conv => {
+        conv.lastUpdated = new Date(conv.lastUpdated)
+        conv.messages.forEach(msg => {
+          msg.timestamp = new Date(msg.timestamp)
+        })
+      })
+      conversations.value = parsedConversations
+    }
+
+    if (savedCurrentId) {
+      const currentId = parseInt(savedCurrentId)
+      // 确保当前对话ID存在于对话列表中
+      if (conversations.value.find(conv => conv.id === currentId)) {
+        currentConversationId.value = currentId
+      }
+    }
+  } catch (error) {
+    console.error('加载对话数据失败:', error)
+  }
+}
+
 // 加载设置
 const loadSettings = () => {
   const savedSettings = localStorage.getItem('aiChatSettings')
@@ -230,6 +283,7 @@ const loadSettings = () => {
 onMounted(() => {
   document.addEventListener('keydown', handleEscKey)
   loadSettings() // 组件挂载时加载设置
+  loadConversations() // 组件挂载时加载对话数据
 })
 
 onUnmounted(() => {
@@ -448,7 +502,7 @@ onUnmounted(() => {
         <!-- 设置弹窗 -->
     <div
       v-if="showSettings"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 backdrop-blur-sm bg-white bg-opacity-20 flex items-center justify-center z-50"
       @click="closeSettings"
     >
       <div
